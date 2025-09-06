@@ -12,7 +12,7 @@ import json
 from datetime import datetime
 
 # Import models
-from src.models.portfolio import db, Category, PortfolioImage, FeaturedImage
+from models.portfolio import db, Category, PortfolioImage, FeaturedImage
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
