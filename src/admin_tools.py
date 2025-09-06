@@ -90,7 +90,6 @@ def import_images_from_data():
             width=img_info['width'],
             height=img_info['height'],
             exif_data=json.dumps(img_info['exif_data']),
-            web_path=img_info['web_path'],
             category_id=default_category.id if default_category else None,
             is_published=True,
             display_order=0,

@@ -304,6 +304,32 @@ def admin_portfolio():
     images = PortfolioImage.query.order_by(PortfolioImage.created_at.desc()).all()
     categories = Category.query.filter_by(is_active=True).all()
     
+    # Generate image cards HTML
+    if not images:
+        images_html = '<div class="no-images"><h3>No Images Found</h3><p>Use the "Import Existing Images" button on the dashboard to scan your /data directory and import your photography.</p></div>'
+    else:
+        image_cards = []
+        for img in images:
+            category_name = next((cat.name for cat in categories if cat.id == img.category_id), 'Uncategorized')
+            status = 'Published' if img.is_published else 'Draft'
+            
+            card_html = f'''
+                <div class="image-card">
+                    <img src="{img.web_path}" alt="{img.alt_text}" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE1MCIgdmlld0JveD0iMCAwIDIwMCAxNTAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMTUwIiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjEwMCIgeT0iNzUiIGZpbGw9IiM2NjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIwLjNlbSI+SW1hZ2UgTm90IEZvdW5kPC90ZXh0Pgo8L3N2Zz4K'">
+                    <div class="image-info">
+                        <div class="image-title">{img.title}</div>
+                        <div class="image-meta">
+                            Category: {category_name}<br>
+                            Size: {img.width}x{img.height}<br>
+                            Status: {status}
+                        </div>
+                    </div>
+                </div>
+            '''
+            image_cards.append(card_html)
+        
+        images_html = '<div class="image-grid">' + ''.join(image_cards) + '</div>'
+    
     return f"""
     <!DOCTYPE html>
     <html>
@@ -339,23 +365,7 @@ def admin_portfolio():
                 <p>Images from your /data directory. Use "Import Existing Images" from the dashboard to add more.</p>
             </div>
             
-            {'<div class="no-images"><h3>No Images Found</h3><p>Use the "Import Existing Images" button on the dashboard to scan your /data directory and import your photography.</p></div>' if not images else f'''
-            <div class="image-grid">
-                {''.join([f"""
-                <div class="image-card">
-                    <img src="{img.web_path}" alt="{img.alt_text}" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE1MCIgdmlld0JveD0iMCAwIDIwMCAxNTAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMTUwIiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjEwMCIgeT0iNzUiIGZpbGw9IiM2NjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIwLjNlbSI+SW1hZ2UgTm90IEZvdW5kPC90ZXh0Pgo8L3N2Zz4K'">
-                    <div class="image-info">
-                        <div class="image-title">{img.title}</div>
-                        <div class="image-meta">
-                            Category: {next((cat.name for cat in categories if cat.id == img.category_id), 'Uncategorized')}<br>
-                            Size: {img.width}x{img.height}<br>
-                            Status: {'Published' if img.is_published else 'Draft'}
-                        </div>
-                    </div>
-                </div>
-                """ for img in images])}
-            </div>
-            '''}</div>
+            {images_html}
         </div>
     </body>
     </html>
@@ -382,7 +392,42 @@ def admin_categories():
             .category-info h3 {{ margin: 0 0 5px 0; }}
             .category-info p {{ margin: 0; color: #ccc; }}
             .image-count {{ background: #666; color: white; padding: 4px 12px; border-radius: 20px; font-size: 0.9em; }}
+            .add-form {{ background: #2a2a2a; padding: 20px; border-radius: 8px; margin-bottom: 20px; display: none; }}
+            .form-group {{ margin-bottom: 15px; }}
+            .form-group label {{ display: block; margin-bottom: 5px; }}
+            .form-group input, .form-group textarea {{ width: 100%; padding: 8px; border: 1px solid #555; background: #333; color: white; border-radius: 4px; }}
+            .form-group textarea {{ height: 80px; resize: vertical; }}
         </style>
+        <script>
+            function toggleAddForm() {{
+                const form = document.getElementById('add-form');
+                form.style.display = form.style.display === 'none' ? 'block' : 'none';
+            }}
+            
+            function addCategory() {{
+                const name = document.getElementById('category-name').value.trim();
+                const description = document.getElementById('category-description').value.trim();
+                
+                if (!name) {{
+                    alert('Category name is required');
+                    return;
+                }}
+                
+                fetch('/admin/categories/add', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/x-www-form-urlencoded' }},
+                    body: 'name=' + encodeURIComponent(name) + '&description=' + encodeURIComponent(description)
+                }})
+                .then(response => response.json())
+                .then(data => {{
+                    if (data.success) {{
+                        location.reload();
+                    }} else {{
+                        alert('Error: ' + data.error);
+                    }}
+                }});
+            }}
+        </script>
     </head>
     <body>
         <div class="container">
@@ -390,8 +435,22 @@ def admin_categories():
                 <h1>Category Management</h1>
                 <div>
                     <a href="/admin" class="btn">← Back to Dashboard</a>
-                    <a href="#" class="btn">+ Add Category</a>
+                    <button onclick="toggleAddForm()" class="btn">+ Add Category</button>
                 </div>
+            </div>
+            
+            <div id="add-form" class="add-form">
+                <h3>Add New Category</h3>
+                <div class="form-group">
+                    <label for="category-name">Category Name:</label>
+                    <input type="text" id="category-name" placeholder="Enter category name">
+                </div>
+                <div class="form-group">
+                    <label for="category-description">Description (optional):</label>
+                    <textarea id="category-description" placeholder="Enter category description"></textarea>
+                </div>
+                <button onclick="addCategory()" class="btn">Add Category</button>
+                <button onclick="toggleAddForm()" class="btn" style="background: #666; margin-left: 10px;">Cancel</button>
             </div>
             
             <div class="category-list">
@@ -409,6 +468,133 @@ def admin_categories():
     </body>
     </html>
     """
+
+@app.route('/admin/categories/add', methods=['POST'])
+def admin_add_category():
+    """Add a new category"""
+    try:
+        name = request.form.get('name', '').strip()
+        description = request.form.get('description', '').strip()
+        
+        if not name:
+            return jsonify({'success': False, 'error': 'Category name is required'})
+        
+        # Create slug from name
+        slug = name.lower().replace(' ', '-').replace('_', '-')
+        
+        # Check if category already exists
+        existing = Category.query.filter_by(name=name).first()
+        if existing:
+            return jsonify({'success': False, 'error': 'Category already exists'})
+        
+        # Get next display order
+        max_order = db.session.query(db.func.max(Category.display_order)).scalar() or 0
+        
+        category = Category(
+            name=name,
+            slug=slug,
+            description=description,
+            display_order=max_order + 1,
+            is_active=True
+        )
+        
+        db.session.add(category)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Category added successfully'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/admin/featured')
+def admin_featured():
+    """Featured image management interface"""
+    images = PortfolioImage.query.filter_by(is_published=True).order_by(PortfolioImage.created_at.desc()).all()
+    current_featured = FeaturedImage.query.filter_by(is_active=True).first()
+    
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Featured Image Management - Fifth Element Photography</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; margin: 20px; background: #1a1a1a; color: white; }}
+            .container {{ max-width: 1200px; margin: 0 auto; }}
+            .header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }}
+            .btn {{ background: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; border: none; cursor: pointer; }}
+            .btn:hover {{ background: #45a049; }}
+            .current-featured {{ background: #2a2a2a; padding: 20px; border-radius: 8px; margin-bottom: 30px; text-align: center; }}
+            .current-featured img {{ max-width: 300px; max-height: 200px; object-fit: cover; border-radius: 4px; }}
+            .image-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }}
+            .image-card {{ background: #2a2a2a; border-radius: 8px; overflow: hidden; cursor: pointer; transition: transform 0.2s; }}
+            .image-card:hover {{ transform: scale(1.05); }}
+            .image-card img {{ width: 100%; height: 150px; object-fit: cover; }}
+            .image-info {{ padding: 15px; }}
+            .image-title {{ font-weight: bold; margin-bottom: 5px; }}
+            .set-featured-btn {{ background: #2196F3; color: white; padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em; }}
+            .set-featured-btn:hover {{ background: #1976D2; }}
+            .featured-badge {{ background: #4CAF50; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; }}
+        </style>
+        <script>
+            function setFeatured(imageId) {{
+                fetch('/admin/featured/set', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/x-www-form-urlencoded' }},
+                    body: 'image_id=' + imageId
+                }})
+                .then(response => response.json())
+                .then(data => {{
+                    if (data.success) {{
+                        location.reload();
+                    }} else {{
+                        alert('Error: ' + data.error);
+                    }}
+                }});
+            }}
+        </script>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>Featured Image Management</h1>
+                <a href="/admin" class="btn">← Back to Dashboard</a>
+            </div>
+            
+            <div class="current-featured">
+                <h3>Current Featured Image</h3>
+                {f'<img src="{current_featured.portfolio_image.web_path}" alt="{current_featured.portfolio_image.title}"><br><strong>{current_featured.portfolio_image.title}</strong>' if current_featured else '<p>No featured image set</p>'}
+            </div>
+            
+            <h3>Select New Featured Image</h3>
+            <div class="image-grid">
+                {''.join([f'''
+                <div class="image-card">
+                    <img src="{img.web_path}" alt="{img.title}">
+                    <div class="image-info">
+                        <div class="image-title">{img.title}</div>
+                        {f'<span class="featured-badge">Current Featured</span>' if current_featured and current_featured.portfolio_image_id == img.id else f'<button class="set-featured-btn" onclick="setFeatured({img.id})">Set as Featured</button>'}
+                    </div>
+                </div>
+                ''' for img in images])}
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+@app.route('/admin/featured/set', methods=['POST'])
+def admin_set_featured():
+    """Set featured image"""
+    try:
+        image_id = request.form.get('image_id', type=int)
+        if not image_id:
+            return jsonify({'success': False, 'error': 'Image ID is required'})
+        
+        from admin_tools import set_featured_image
+        result = set_featured_image(image_id)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 # Frontend routes
 @app.route('/', defaults={'path': ''})

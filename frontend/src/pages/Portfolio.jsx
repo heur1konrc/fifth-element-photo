@@ -139,8 +139,9 @@ function Portfolio() {
                     <img
                       src={image.web_path}
                       alt={image.alt_text || image.title || image.filename}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover opacity-100"
                       loading="lazy"
+                      style={{ display: 'block', visibility: 'visible' }}
                     />
                     <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-300 flex items-center justify-center">
                       <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-center p-4">
