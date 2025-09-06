@@ -99,15 +99,8 @@ def get_featured_image():
 @app.route('/admin')
 def admin_dashboard():
     """Admin dashboard"""
-    total_images = PortfolioImage.query.count()
-    total_categories = Category.query.filter_by(is_active=True).count()
-    featured_image = FeaturedImage.query.filter_by(is_active=True).first()
-    
-    stats = {
-        'total_images': total_images,
-        'total_categories': total_categories,
-        'has_featured_image': featured_image is not None
-    }
+    from admin_tools import get_portfolio_stats
+    stats = get_portfolio_stats()
     
     return f"""
     <!DOCTYPE html>
@@ -124,6 +117,8 @@ def admin_dashboard():
             .nav-links {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }}
             .nav-link {{ background: #333; padding: 20px; border-radius: 8px; text-decoration: none; color: white; text-align: center; transition: background 0.3s; }}
             .nav-link:hover {{ background: #444; }}
+            .category-stats {{ margin-top: 20px; }}
+            .category-stat {{ display: flex; justify-content: space-between; padding: 5px 0; }}
         </style>
     </head>
     <body>
@@ -139,6 +134,10 @@ def admin_dashboard():
                     <div>Total Images</div>
                 </div>
                 <div class="stat-card">
+                    <div class="stat-number">{stats['published_images']}</div>
+                    <div>Published Images</div>
+                </div>
+                <div class="stat-card">
                     <div class="stat-number">{stats['total_categories']}</div>
                     <div>Categories</div>
                 </div>
@@ -148,21 +147,30 @@ def admin_dashboard():
                 </div>
             </div>
             
+            <div class="category-stats">
+                <h3>Images by Category:</h3>
+                {''.join([f'<div class="category-stat"><span>{cat["name"]}</span><span>{cat["count"]} images</span></div>' for cat in stats['category_stats']])}
+            </div>
+            
             <div class="nav-links">
+                <a href="/admin/import" class="nav-link">
+                    <h3>🔄 Import Existing Images</h3>
+                    <p>Scan /data folder and import all your existing images</p>
+                </a>
                 <a href="/admin/portfolio" class="nav-link">
-                    <h3>Portfolio Management</h3>
-                    <p>Upload, organize, and manage your photography portfolio</p>
+                    <h3>📸 Portfolio Management</h3>
+                    <p>Organize, edit, and manage your photography portfolio</p>
                 </a>
                 <a href="/admin/categories" class="nav-link">
-                    <h3>Category Management</h3>
+                    <h3>📁 Category Management</h3>
                     <p>Create and organize portfolio categories</p>
                 </a>
                 <a href="/admin/featured" class="nav-link">
-                    <h3>Featured Image</h3>
+                    <h3>⭐ Featured Image</h3>
                     <p>Set the featured image with EXIF data display</p>
                 </a>
                 <a href="/" class="nav-link">
-                    <h3>View Website</h3>
+                    <h3>🌐 View Website</h3>
                     <p>See your live photography website</p>
                 </a>
             </div>
@@ -170,6 +178,116 @@ def admin_dashboard():
     </body>
     </html>
     """
+
+@app.route('/admin/import')
+def admin_import():
+    """Import images from /data directory"""
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Import Images - Fifth Element Photography</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; margin: 20px; background: #1a1a1a; color: white; }}
+            .container {{ max-width: 800px; margin: 0 auto; }}
+            .header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }}
+            .btn {{ background: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; border: none; cursor: pointer; }}
+            .btn:hover {{ background: #45a049; }}
+            .btn-danger {{ background: #f44336; }}
+            .btn-danger:hover {{ background: #da190b; }}
+            .info-box {{ background: #2a2a2a; padding: 20px; border-radius: 8px; margin-bottom: 20px; }}
+            .result-box {{ background: #2a2a2a; padding: 20px; border-radius: 8px; margin-top: 20px; display: none; }}
+            .success {{ border-left: 4px solid #4CAF50; }}
+            .error {{ border-left: 4px solid #f44336; }}
+        </style>
+        <script>
+            function importImages() {{
+                document.getElementById('import-btn').disabled = true;
+                document.getElementById('import-btn').textContent = 'Importing...';
+                
+                fetch('/admin/import/execute', {{ method: 'POST' }})
+                    .then(response => response.json())
+                    .then(data => {{
+                        const resultBox = document.getElementById('result-box');
+                        const resultContent = document.getElementById('result-content');
+                        
+                        if (data.success) {{
+                            resultBox.className = 'result-box success';
+                            resultContent.innerHTML = `
+                                <h3>✅ Import Successful!</h3>
+                                <p><strong>Total images found:</strong> ${{data.total_found}}</p>
+                                <p><strong>Images imported:</strong> ${{data.imported}}</p>
+                                <p><strong>Images skipped:</strong> ${{data.skipped}} (already in database)</p>
+                            `;
+                        }} else {{
+                            resultBox.className = 'result-box error';
+                            resultContent.innerHTML = `
+                                <h3>❌ Import Failed</h3>
+                                <p><strong>Error:</strong> ${{data.error}}</p>
+                            `;
+                        }}
+                        
+                        resultBox.style.display = 'block';
+                        document.getElementById('import-btn').disabled = false;
+                        document.getElementById('import-btn').textContent = 'Import Images';
+                    }})
+                    .catch(error => {{
+                        const resultBox = document.getElementById('result-box');
+                        const resultContent = document.getElementById('result-content');
+                        
+                        resultBox.className = 'result-box error';
+                        resultContent.innerHTML = `
+                            <h3>❌ Import Failed</h3>
+                            <p><strong>Error:</strong> ${{error.message}}</p>
+                        `;
+                        resultBox.style.display = 'block';
+                        
+                        document.getElementById('import-btn').disabled = false;
+                        document.getElementById('import-btn').textContent = 'Import Images';
+                    }});
+            }}
+        </script>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>Import Existing Images</h1>
+                <a href="/admin" class="btn">← Back to Dashboard</a>
+            </div>
+            
+            <div class="info-box">
+                <h3>📁 Import from /data Directory</h3>
+                <p>This will scan your <code>/data</code> directory for image files and add them to your portfolio database.</p>
+                <ul>
+                    <li>✅ Automatically detects image files (JPG, PNG, GIF, etc.)</li>
+                    <li>✅ Extracts EXIF data and image dimensions</li>
+                    <li>✅ Creates titles from filenames</li>
+                    <li>✅ Assigns to default category (you can change later)</li>
+                    <li>✅ Skips images already in database</li>
+                </ul>
+                <p><strong>Note:</strong> This only adds images to the database - your original files remain unchanged.</p>
+            </div>
+            
+            <div style="text-align: center;">
+                <button id="import-btn" class="btn" onclick="importImages()">
+                    🔄 Import Images from /data
+                </button>
+            </div>
+            
+            <div id="result-box" class="result-box">
+                <div id="result-content"></div>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+@app.route('/admin/import/execute', methods=['POST'])
+def admin_import_execute():
+    """Execute the import process"""
+    from admin_tools import import_images_from_data
+    result = import_images_from_data()
+    return jsonify(result)
 
 @app.route('/admin/portfolio')
 def admin_portfolio():
