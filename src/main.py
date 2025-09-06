@@ -285,15 +285,24 @@ def admin_import():
 @app.route('/admin/import/execute', methods=['POST'])
 def admin_import_execute():
     """Execute the import process"""
-    from admin_tools import import_images_from_data
-    result = import_images_from_data()
-    return jsonify(result)
+    try:
+        from admin_tools import import_images_from_data
+        result = import_images_from_data()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'imported': 0,
+            'skipped': 0,
+            'total_found': 0
+        })
 
 @app.route('/admin/portfolio')
 def admin_portfolio():
     """Portfolio management interface"""
-    categories = Category.query.order_by(Category.display_order).all()
-    images = PortfolioImage.query.order_by(PortfolioImage.display_order, PortfolioImage.created_at.desc()).all()
+    images = PortfolioImage.query.order_by(PortfolioImage.created_at.desc()).all()
+    categories = Category.query.filter_by(is_active=True).all()
     
     return f"""
     <!DOCTYPE html>
@@ -304,44 +313,53 @@ def admin_portfolio():
             body {{ font-family: Arial, sans-serif; margin: 20px; background: #1a1a1a; color: white; }}
             .container {{ max-width: 1200px; margin: 0 auto; }}
             .header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }}
-            .btn {{ background: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; }}
+            .btn {{ background: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; border: none; cursor: pointer; }}
             .btn:hover {{ background: #45a049; }}
-            .portfolio-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }}
+            .btn-danger {{ background: #f44336; }}
+            .btn-danger:hover {{ background: #da190b; }}
+            .upload-section {{ background: #2a2a2a; padding: 20px; border-radius: 8px; margin-bottom: 30px; }}
+            .image-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }}
             .image-card {{ background: #2a2a2a; border-radius: 8px; overflow: hidden; }}
             .image-card img {{ width: 100%; height: 150px; object-fit: cover; }}
             .image-info {{ padding: 15px; }}
-            .category-badge {{ background: #666; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; }}
+            .image-title {{ font-weight: bold; margin-bottom: 5px; }}
+            .image-meta {{ font-size: 0.9em; color: #ccc; }}
+            .no-images {{ text-align: center; padding: 40px; color: #666; }}
         </style>
     </head>
     <body>
         <div class="container">
             <div class="header">
                 <h1>Portfolio Management</h1>
-                <div>
-                    <a href="/admin" class="btn">← Back to Dashboard</a>
-                    <a href="#" class="btn">+ Upload Images</a>
-                </div>
+                <a href="/admin" class="btn">← Back to Dashboard</a>
             </div>
             
-            <div class="portfolio-grid">
-                {''.join([f'''
+            <div class="upload-section">
+                <h3>📁 Your Portfolio Images</h3>
+                <p>Images from your /data directory. Use "Import Existing Images" from the dashboard to add more.</p>
+            </div>
+            
+            {'<div class="no-images"><h3>No Images Found</h3><p>Use the "Import Existing Images" button on the dashboard to scan your /data directory and import your photography.</p></div>' if not images else f'''
+            <div class="image-grid">
+                {''.join([f"""
                 <div class="image-card">
-                    <img src="/data/{img.filename}" alt="{img.title or img.filename}">
+                    <img src="{img.web_path}" alt="{img.alt_text}" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE1MCIgdmlld0JveD0iMCAwIDIwMCAxNTAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMTUwIiBmaWxsPSIjMzMzIi8+Cjx0ZXh0IHg9IjEwMCIgeT0iNzUiIGZpbGw9IiM2NjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIwLjNlbSI+SW1hZ2UgTm90IEZvdW5kPC90ZXh0Pgo8L3N2Zz4K'">
                     <div class="image-info">
-                        <h4>{img.title or img.filename}</h4>
-                        <span class="category-badge">{img.category.name if img.category else 'No Category'}</span>
-                        <p>{img.description or 'No description'}</p>
+                        <div class="image-title">{img.title}</div>
+                        <div class="image-meta">
+                            Category: {next((cat.name for cat in categories if cat.id == img.category_id), 'Uncategorized')}<br>
+                            Size: {img.width}x{img.height}<br>
+                            Status: {'Published' if img.is_published else 'Draft'}
+                        </div>
                     </div>
                 </div>
-                ''' for img in images])}
+                """ for img in images])}
             </div>
-            
-            {f'<p style="text-align: center; margin-top: 40px; color: #666;">No images uploaded yet. Start by uploading your first image!</p>' if not images else ''}
+            '''}</div>
         </div>
     </body>
     </html>
     """
-
 @app.route('/admin/categories')
 def admin_categories():
     """Category management interface"""
